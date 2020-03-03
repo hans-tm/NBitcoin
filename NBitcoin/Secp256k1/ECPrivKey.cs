@@ -582,6 +582,13 @@ namespace NBitcoin.Secp256k1
 			}
 		}
 
+		public void WriteToSpan(Span<byte> span)
+		{
+			if (this.cleared)
+				throw new ObjectDisposedException(nameof(ECPrivKey));
+			this.sec.WriteToSpan(span);
+		}
+
 		public SecpECDSASignature SignECDSARFC6979(ReadOnlySpan<byte> msg32)
 		{
 			var ret = TrySignECDSA(msg32, out var sig);

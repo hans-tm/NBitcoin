@@ -89,8 +89,26 @@ namespace NBitcoin.Crypto
 			seq.AddObject(new DerInteger(S));
 			seq.Close();
 			return bos.ToArray();
-
 		}
+#if HAS_SPAN
+		public void WriteDerToSpan(Span<byte> sigs)
+		{
+			//TODO: Spanify
+			ToDER().AsSpan().CopyTo(sigs);
+		}
+		internal bool TryToSecpECDSASignature(out Secp256k1.SecpECDSASignature signature)
+		{
+			Span<byte> sigs = stackalloc byte[Secp256k1.SecpECDSASignature.MaxLength];
+			WriteDerToSpan(sigs);
+			if (Secp256k1.SecpECDSASignature.TryCreateFromDer(sigs, out var secpsig) && secpsig is Secp256k1.SecpECDSASignature)
+			{
+				signature = secpsig;
+				return true;
+			}
+			signature = null;
+			return false;
+		}
+#endif
 		const string InvalidDERSignature = "Invalid DER signature";
 		public static ECDSASignature FromDER(byte[] sig)
 		{

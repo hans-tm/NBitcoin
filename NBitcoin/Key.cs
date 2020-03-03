@@ -27,8 +27,12 @@ namespace NBitcoin
 			return Network.Parse<BitcoinEncryptedSecret>(wif, network).GetKey(password);
 		}
 
+#if HAS_SPAN
+		internal Secp256k1.ECPrivKey _ECKey;
+#else
 		byte[] vch = new byte[0];
 		internal ECKey _ECKey;
+#endif
 		public bool IsCompressed
 		{
 			get;
@@ -40,9 +44,31 @@ namespace NBitcoin
 		{
 
 		}
+#if HAS_SPAN
+		internal Key(Secp256k1.ECPrivKey ecKey, bool compressed)
+		{
+			if (ecKey == null)
+				throw new ArgumentNullException(nameof(ecKey));
+			this.IsCompressed = compressed;
+			_ECKey = ecKey;
+		}
+#endif
 
 		public Key(bool fCompressedIn)
 		{
+			IsCompressed = fCompressedIn;
+#if HAS_SPAN
+			Span<byte> data = stackalloc byte[KEY_SIZE];
+			while (true)
+			{
+				RandomUtils.GetBytes(data);
+				if (Secp256k1.Context.Instance.TryCreateECPrivKey(data, out var key) && key is Secp256k1.ECPrivKey)
+				{
+					_ECKey = key;
+					return;
+				}
+			}
+#else
 			var data = new byte[KEY_SIZE];
 			do
 			{
@@ -52,6 +78,7 @@ namespace NBitcoin
 			vch = data.SafeSubarray(0, data.Length);
 			IsCompressed = fCompressedIn;
 			_ECKey = new ECKey(vch, true);
+#endif
 		}
 		public Key(byte[] data, int count = -1, bool fCompressedIn = true)
 		{
@@ -61,14 +88,24 @@ namespace NBitcoin
 			{
 				throw new ArgumentException(paramName: "data", message: $"The size of an EC key should be {KEY_SIZE}");
 			}
+#if HAS_SPAN
+			if (Secp256k1.Context.Instance.TryCreateECPrivKey(data.AsSpan().Slice(0, KEY_SIZE), out var key) && key is Secp256k1.ECPrivKey)
+			{
+				_ECKey = key;
+			}
+			else
+				throw new ArgumentException(paramName: "data", message: "Invalid EC key");
+#else
 			if (Check(data))
 			{
 				vch = data.SafeSubarray(0, count);
 				IsCompressed = fCompressedIn;
 				_ECKey = new ECKey(vch, true);
+
 			}
 			else
 				throw new ArgumentException(paramName: "data", message: "Invalid EC key");
+#endif
 		}
 
 		private static bool Check(byte[] vch)
@@ -85,10 +122,16 @@ namespace NBitcoin
 			{
 				if (_PubKey is PubKey pubkey)
 					return pubkey;
+#if HAS_SPAN
+				pubkey = new PubKey(_ECKey.CreatePubKey(), IsCompressed);
+				_PubKey = pubkey;
+				return pubkey;
+#else
 				ECKey key = new ECKey(vch, true);
 				pubkey = key.GetPubKey(IsCompressed);
 				_PubKey = pubkey;
 				return pubkey;
+#endif
 			}
 		}
 
@@ -126,6 +169,7 @@ namespace NBitcoin
 		{
 			return SignCompact(hash, true);
 		}
+
 		public byte[] SignCompact(uint256 hash, bool forceLowR)
 		{
 			if (hash is null)
@@ -160,15 +204,36 @@ namespace NBitcoin
 
 
 
-		#region IBitcoinSerializable Members
+#region IBitcoinSerializable Members
 
 		public void ReadWrite(BitcoinStream stream)
 		{
+#if HAS_SPAN
+			Span<byte> tmp = stackalloc byte[KEY_SIZE];
+			if (stream.Serializing)
+			{
+				stream.ReadWrite(ref tmp);
+				if (Secp256k1.Context.Instance.TryCreateECPrivKey(tmp, out var k) && k is Secp256k1.ECPrivKey)
+				{
+					_ECKey = k;
+				}
+				else
+				{
+					throw new FormatException("Unvalid private key");
+				}
+			}
+			else
+			{
+				_ECKey.WriteToSpan(tmp);
+				stream.ReadWrite(ref tmp);
+			}
+#else
 			stream.ReadWrite(ref vch);
 			if (!stream.Serializing)
 			{
 				_ECKey = new ECKey(vch, true);
 			}
+#endif
 		}
 
 		#endregion
@@ -218,6 +283,29 @@ namespace NBitcoin
 
 		public Key Derivate(byte[] cc, uint nChild, out byte[] ccChild)
 		{
+#if HAS_SPAN
+			if (!IsCompressed)
+				throw new InvalidOperationException("The key must be compressed");
+			Span<byte> vout = stackalloc byte[0];
+			vout.Fill(0);
+			if ((nChild >> 31) == 0)
+			{
+				Span<byte> pubkey = stackalloc byte[33];
+				this.PubKey.ToBytes(pubkey, out _);
+				Hashes.BIP32Hash(cc, nChild, pubkey[0], pubkey.Slice(1), vout);
+			}
+			else
+			{
+				Span<byte> privkey = stackalloc byte[32];
+				this._ECKey.WriteToSpan(privkey);
+				Hashes.BIP32Hash(cc, nChild, 0, privkey, vout);
+				privkey.Fill(0);
+			}
+			ccChild = new byte[32]; ;
+			vout.Slice(32, 32).CopyTo(ccChild);
+			Secp256k1.ECPrivKey keyChild = _ECKey.AddTweak(vout);
+			return new Key(keyChild, true);
+#else
 			byte[]? l = null;
 			if ((nChild >> 31) == 0)
 			{
@@ -247,6 +335,7 @@ namespace NBitcoin
 			if (keyBytes.Length < 32)
 				keyBytes = new byte[32 - keyBytes.Length].Concat(keyBytes).ToArray();
 			return new Key(keyBytes);
+#endif
 		}
 
 		public Key Uncover(Key scan, PubKey ephem)
@@ -289,7 +378,7 @@ namespace NBitcoin
 			return new BitcoinSecret(this, network).ToString();
 		}
 
-		#region IDestination Members
+#region IDestination Members
 
 		public Script ScriptPubKey
 		{
@@ -299,7 +388,7 @@ namespace NBitcoin
 			}
 		}
 
-		#endregion
+#endregion
 
 		public TransactionSignature Sign(uint256 hash, SigHash sigHash, bool useLowR = true)
 		{
@@ -334,7 +423,13 @@ namespace NBitcoin
 
 		public string ToHex()
 		{
+#if HAS_SPAN
+			Span<byte> tmp = stackalloc byte[KEY_SIZE];
+			_ECKey.WriteToSpan(tmp);
+			return Encoders.Hex.EncodeData(tmp);
+#else
 			return Encoders.Hex.EncodeData(vch);
+#endif
 		}
 	}
 }
