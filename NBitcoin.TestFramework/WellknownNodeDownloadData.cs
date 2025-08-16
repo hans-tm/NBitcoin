@@ -2088,6 +2088,28 @@ namespace NBitcoin.Tests
 			};
 		}
 
+		public class ShibacoinNodeDownloadData : NodeDownloadDataBase
+		{
+			public NodeDownloadData v1_2_1 = new NodeDownloadData()
+			{
+				Version = "1.2.1",
+				Windows = new NodeOSDownloadData()
+				{
+					DownloadLink = "https://github.com/hans-tm/shibacoin/releases/download/v{0}/shibacoin-{0}-win64.zip",
+					Archive = "shibacoin-{0}-win64.zip",
+					Executable = "shibacoin-{0}/bin/shibacoind.exe",
+					Hash = "f3b6e2b13070b359e05ce8a7100518143bf72fb84d7c66c58c1e212f67d3c1f6"
+				},
+				Linux = new NodeOSDownloadData()
+				{
+					DownloadLink = "https://github.com/hans-tm/shibacoin/releases/download/v{0}/shibacoin-{0}-linux.tar.gz",
+					Archive = "shibacoin-{0}-linux.tar.gz",
+					Executable = "shibacoin-{0}/bin/shibacoind",
+					Hash = "da441154ac65ead5e56b98804e655132460ec95623dfb941ac364d4a0aefee34"
+				}
+			};
+		}
+
 		/// <summary>
 		/// Using Stratis C# full node.
 		/// Should be updated to use official release once it is deployed.
@@ -2552,6 +2574,11 @@ namespace NBitcoin.Tests
 		{
 			get; set;
 		} = new TriptourcoinNodeDownloadData();
+
+		public static ShibacoinNodeDownloadData Shibacoin
+		{
+			get; set;
+		} = new ShibacoinNodeDownloadData();
 
 		public bool UseSectionInConfigFile { get; private set; }
 		public string AdditionalRegtestConfig { get; private set; }

@@ -32,6 +32,7 @@ Currently supported altcoins are:
 * Althash
 * Neblio
 * Optical Bitcoin
+* Shibacoin
 
 ## How to use?
 

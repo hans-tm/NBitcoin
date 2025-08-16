@@ -66,6 +66,7 @@ namespace NBitcoin.Tests
 			//var builder = NodeBuilder.Create(NodeDownloadData.LBRYCredits.v2_1_6, Altcoins.LBRYCredits.Instance.Regtest, caller);
 
 			//var builder = NodeBuilder.Create(NodeDownloadData.XDS.v1_0_16, Altcoins.XDS.Instance.Regtest, caller, true);
+			//var builder = NodeBuilder.Create(NodeDownloadData.Shibacoin.v1_2_1, Altcoins.Shibacoin.Instance.Regtest, caller);
 
 			//var builder = Create(NodeDownloadData.Bitcoin.v0_19_0_1, caller);
 
